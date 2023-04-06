@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"monkey/compiler"
-    "monkey/lexer"
-    "monkey/parser"
-    "monkey/vm"
+	"monkey/lexer"
+	"monkey/parser"
+	"monkey/vm"
 )
 
 const PROMPT = ">> "
@@ -35,7 +35,7 @@ func Start(in io.Reader, out io.Writer) {
 		comp := compiler.New()
 		err := comp.Compile(program)
 		if err != nil {
-            fmt.Fprintf(out, "Woops! Compilation failed:\n %s\n", err)
+			fmt.Fprintf(out, "Woops! Compilation failed:\n %s\n", err)
 			continue
 		}
 
@@ -46,7 +46,7 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		stackTop := machine.StackTop()
+		lastPopped := machine.LastPoppedStackElem()
 		io.WriteString(out, stackTop.Inspect())
 		io.WriteString(out, "\n")
 	}
