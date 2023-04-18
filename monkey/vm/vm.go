@@ -16,46 +16,46 @@ var False = &object.Boolean{Value: false}
 var Null = &object.Null{}
 
 type VM struct {
-	constants    []object.Object
+	constants []object.Object
 
 	stack   []object.Object
 	sp      int
 	globals []object.Object
 
-	frames []*Frame
+	frames      []*Frame
 	framesIndex int
 }
 
-func (vm *VM) currentFrame() *Frame { 
+func (vm *VM) currentFrame() *Frame {
 	return vm.frames[vm.framesIndex-1]
 }
 
-func (vm *VM) pushFrame(f *Frame) { 
-	vm.frames[vm.framesIndex] = f 
+func (vm *VM) pushFrame(f *Frame) {
+	vm.frames[vm.framesIndex] = f
 	vm.framesIndex++
 }
 
-func (vm *VM) popFrame() *Frame { 
+func (vm *VM) popFrame() *Frame {
 	vm.framesIndex--
-	return vm.frames[vm.framesIndex] 
+	return vm.frames[vm.framesIndex]
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
-	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions} 
-	mainFrame := NewFrame(mainFn)
+	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
+	mainFrame := NewFrame(mainFn, 0)
 
 	frames := make([]*Frame, MaxFrames)
 	frames[0] = mainFrame
 
 	return &VM{
-		constants:    bytecode.Constants,
+		constants: bytecode.Constants,
 
-		stack:   make([]object.Object, StackSize),
-		sp:      0,
+		stack: make([]object.Object, StackSize),
+		sp:    0,
 
 		globals: make([]object.Object, GlobalsSize),
 
-		frames: frames,
+		frames:      frames,
 		framesIndex: 1,
 	}
 }
@@ -75,7 +75,7 @@ func (vm *VM) StackTop() object.Object {
 
 func (vm *VM) Run() error {
 	var ip int
-	var ins code.Instructions 
+	var ins code.Instructions
 	var op code.Opcode
 
 	for vm.currentFrame().ip < len(vm.currentFrame().Instructions())-1 {
@@ -203,30 +203,48 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
-		
+
 		case code.OpCall:
-			fn, ok := vm.stack[vm.sp-1].(*object.CompiledFunction) 
+			fn, ok := vm.stack[vm.sp-1].(*object.CompiledFunction)
 			if !ok {
-				return fmt.Errorf("calling non-function") 
+				return fmt.Errorf("calling non-function")
 			}
-			frame := NewFrame(fn)
+			frame := NewFrame(fn, vm.sp)
 			vm.pushFrame(frame)
-		
+			vm.sp = frame.basePointer + fn.NumLocals
+
 		case code.OpReturnValue:
 			returnValue := vm.pop()
-			vm.popFrame()
-			vm.pop()
+			frame := vm.popFrame()
+			vm.sp = frame.basePointer - 1
 
-			err := vm.push(returnValue) 
+			err := vm.push(returnValue)
 			if err != nil {
-				return err 
+				return err
 			}
-		
+
 		case code.OpReturn:
-			vm.popFrame()
-			vm.pop()
+			frame := vm.popFrame()
+			vm.sp = frame.basePointer - 1
 
 			err := vm.push(Null)
+			if err != nil {
+				return err
+			}
+
+		case code.OpSetLocal:
+			localIndex := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+
+			frame := vm.currentFrame()
+			vm.stack[frame.basePointer+int(localIndex)] = vm.pop()
+
+		case code.OpGetLocal:
+			localIndex := code.ReadUint8(ins[ip+1:])
+			vm.currentFrame().ip += 1
+
+			frame := vm.currentFrame()
+			err := vm.push(vm.stack[frame.basePointer+int(localIndex)])
 			if err != nil {
 				return err
 			}
